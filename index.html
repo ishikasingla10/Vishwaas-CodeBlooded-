@@ -1,0 +1,248 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Vishwas</title>
+    <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Vishwas</h1>
+            <p>Protect yourself from scams with AI-powered analysis</p>
+        </div>
+
+        <div class="card">
+            <div class="form-group">
+                <label for="message" class="form-label">Enter suspicious message</label>
+                <textarea 
+                    id="message" 
+                    class="form-control" 
+                    placeholder="Type or speak your suspicious message here..."
+                ></textarea>
+            </div>
+
+            <div class="btn-group">
+                <button id="analyzeBtn" class="btn btn-primary">
+                    <span>Analyze Text</span>
+                </button>
+                <button id="speakBtn" class="btn btn-secondary">
+                    <span>Speak Message</span>
+                </button>
+                <div class="language-toggle-container">
+                    <span class="language-label">English</span>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="languageToggle" aria-label="Toggle between English and Hindi">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span class="language-label">हिंदी</span>
+                </div>
+                <button id="startVoiceBtn" class="btn btn-success">
+                    <span>Start Voice Input</span>
+                </button>
+                <button id="stopVoiceBtn" class="btn btn-warning" disabled>
+                    <span>Stop Voice Input</span>
+                </button>
+            </div>
+
+            <div id="result" class="result-container"></div>
+        </div>
+    </div>
+
+    <script>
+        const translations = {
+            en: {
+                title: "Vishwas",
+                subtitle: "Protect yourself from scams with AI-powered analysis",
+                enterMessageLabel: "Enter suspicious message",
+                messagePlaceholder: "Type or speak your suspicious message here...",
+                analyzeText: "Analyze Text",
+                speakMessage: "Speak Message",
+                startVoiceInput: "Start Voice Input",
+                stopVoiceInput: "Stop Voice Input"
+            },
+            hi: {
+                title: "विश्वास",
+                subtitle: "एआई-संचालित विश्लेषण के साथ खुद को धोखाधड़ी से बचाएं",
+                enterMessageLabel: "संदिग्ध संदेश दर्ज करें",
+                messagePlaceholder: "अपना संदिग्ध संदेश यहाँ टाइप या बोलें...",
+                analyzeText: "पाठ विश्लेषण करें",
+                speakMessage: "संदेश बोलें",
+                startVoiceInput: "वॉइस इनपुट शुरू करें",
+                stopVoiceInput: "वॉइस इनपुट बंद करें"
+            }
+        };
+
+        const messageInput = document.getElementById('message');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        const speakBtn = document.getElementById('speakBtn');
+        const startVoiceBtn = document.getElementById('startVoiceBtn');
+        const stopVoiceBtn = document.getElementById('stopVoiceBtn');
+        const resultDiv = document.getElementById('result');
+        const languageToggle = document.getElementById('languageToggle');
+        const titleElement = document.querySelector('.header h1');
+        const subtitleElement = document.querySelector('.header p');
+        const enterMessageLabel = document.querySelector('label[for="message"]');
+        const englishLabel = document.querySelector('.language-label:first-child');
+        const hindiLabel = document.querySelector('.language-label:last-child');
+
+        function updateLanguageTexts(lang) {
+            const t = translations[lang] || translations.en;
+            titleElement.textContent = t.title;
+            subtitleElement.textContent = t.subtitle;
+            enterMessageLabel.textContent = t.enterMessageLabel;
+            messageInput.placeholder = t.messagePlaceholder;
+            analyzeBtn.querySelector('span').textContent = t.analyzeText;
+            speakBtn.querySelector('span').textContent = t.speakMessage;
+            startVoiceBtn.querySelector('span').textContent = t.startVoiceInput;
+            stopVoiceBtn.querySelector('span').textContent = t.stopVoiceInput;
+            
+            // Update active states for labels
+            if (lang === 'hi') {
+                englishLabel.classList.remove('active');
+                hindiLabel.classList.add('active');
+            } else {
+                englishLabel.classList.add('active');
+                hindiLabel.classList.remove('active');
+            }
+        }
+
+        languageToggle.addEventListener('change', (event) => {
+            const selectedLang = event.target.checked ? 'hi' : 'en';
+            updateLanguageTexts(selectedLang);
+            
+            // Update recognition language
+            if (recognition) {
+                recognition.lang = event.target.checked ? 'hi-IN' : 'en-US';
+            }
+        });
+
+        // Initialize with English texts
+        updateLanguageTexts('en');
+
+        analyzeBtn.onclick = async () => {
+            const message = messageInput.value.trim();
+            if (!message) {
+                alert(languageToggle.checked ? 'कृपया विश्लेषण के लिए एक संदेश दर्ज करें।' : 'Please enter a message to analyze.');
+                return;
+            }
+            const response = await fetch('/analyze', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: message })
+            });
+            const data = await response.json();
+            displayResult(data);
+        };
+
+        speakBtn.onclick = () => {
+            const text = resultDiv.textContent || '';
+            if (!text) {
+                alert(languageToggle.checked ? 'कोई विश्लेषण परिणाम बोलने के लिए नहीं है।' : 'No analysis result to speak.');
+                return;
+            }
+            const selectedLang = languageToggle.checked ? 'hi-IN' : 'en-US';
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = selectedLang;
+            speechSynthesis.speak(utterance);
+        };
+
+        let recognition;
+        if ('webkitSpeechRecognition' in window) {
+            recognition = new webkitSpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = false;
+            recognition.lang = 'en-US';
+
+            recognition.onresult = (event) => {
+                const transcript = event.results[event.results.length - 1][0].transcript;
+                messageInput.value += transcript + ' ';
+            };
+
+            recognition.onerror = (event) => {
+                console.error('Speech recognition error', event);
+            };
+
+            recognition.onend = () => {
+                startVoiceBtn.disabled = false;
+                stopVoiceBtn.disabled = true;
+            };
+        } else {
+            startVoiceBtn.disabled = true;
+            alert('Speech recognition not supported in this browser.');
+        }
+
+        startVoiceBtn.onclick = () => {
+            recognition.start();
+            startVoiceBtn.disabled = true;
+            stopVoiceBtn.disabled = false;
+        };
+
+        stopVoiceBtn.onclick = () => {
+            recognition.stop();
+            startVoiceBtn.disabled = false;
+            stopVoiceBtn.disabled = true;
+        };
+
+        function displayResult(data) {
+            if (data.error) {
+                resultDiv.innerHTML = `
+                    <div class="result-card risk-high">
+                        <div class="result-title">${languageToggle.checked ? 'त्रुटि' : 'Error'}</div>
+                        <div class="result-content">${data.error}</div>
+                    </div>
+                `;
+                return;
+            }
+
+            const riskLevelEn = (data.risk || data.risk_level || 'N/A').toLowerCase();
+            const riskClass = riskLevelEn === 'low' ? 'risk-low' : 
+                             riskLevelEn === 'medium' ? 'risk-medium' : 
+                             riskLevelEn === 'high' ? 'risk-high' : 'risk-low';
+
+            // Translation dictionary for analysis results
+            const analysisTranslations = {
+                hi: {
+                    'low': 'कम जोखिम',
+                    'medium': 'मध्यम जोखिम',
+                    'high': 'उच्च जोखिम',
+                    'safe': 'सुरक्षित',
+                    'no text': 'कोई पाठ नहीं',
+                    'Multiple red flags detected - likely a scam': 'कई चेतावनी संकेत पाए गए - संभवतः धोखाधड़ी',
+                    'Suspicious elements present - proceed with caution': 'संदिग्ध तत्व मौजूद हैं - सावधानी से आगे बढ़ें',
+                    'Some concerns but appears mostly legitimate': 'कुछ चिंताएं हैं लेकिन अधिकांशतः वैध प्रतीत होता है',
+                    'No obvious scam indicators detected': 'कोई स्पष्ट धोखाधड़ी संकेत नहीं मिले',
+                    'Please provide a message to analyze.': 'कृपया विश्लेषण के लिए एक संदेश प्रदान करें।'
+                }
+            };
+
+            const lang = languageToggle.checked ? 'hi' : 'en';
+            const t = analysisTranslations[lang] || {};
+
+            // Translate risk level and summary if Hindi selected
+            const riskLevel = lang === 'hi' ? (t[riskLevelEn] || data.risk) : data.risk;
+            const summary = lang === 'hi' ? (t[data.summary] || data.summary) : data.summary;
+
+            // Translate reasons array if Hindi selected
+            const reasons = lang === 'hi' && data.reasons ? data.reasons.map(r => t[r] || r) : data.reasons;
+
+            resultDiv.innerHTML = `
+                <div class="result-card ${riskClass} fade-in">
+                    <div class="result-title">${lang === 'hi' ? 'विश्लेषण परिणाम' : 'Analysis Results'}</div>
+                    <div class="result-content">
+                        <p><strong>${lang === 'hi' ? 'जोखिम स्तर:' : 'Risk Level:'}</strong> ${riskLevel || 'N/A'}</p>
+                        <p><strong>Score:</strong> ${data.score}</p>
+                        <p><strong>${lang === 'hi' ? 'सारांश:' : 'Summary:'}</strong> ${summary}</p>
+                        <div><strong>${lang === 'hi' ? 'कारण:' : 'Reasons:'}</strong></div>
+                        <ul class="result-list">
+                            ${(reasons || []).map(r => `<li>${r}</li>`).join('')}
+                        </ul>
+                    </div>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>
